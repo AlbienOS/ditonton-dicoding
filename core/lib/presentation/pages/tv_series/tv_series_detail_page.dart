@@ -1,11 +1,16 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:core/domain/entities/tv_series_detail.dart';
+import 'package:core/presentation/bloc/tv_series/tv_series_detail/tv_series_detail_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/tv_series_recommendation/tv_series_recommendation_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/tv_series_watchlist/tv_series_watchlist_bloc.dart';
 import 'package:core/presentation/pages/tv_series/tv_series_list_page.dart';
 import 'package:core/presentation/provider/tv_series/tv_series_detail_notifier.dart';
 import 'package:core/presentation/widgets/season_card.dart';
 import 'package:core/styles/colors.dart';
 import 'package:core/utils/state_enum.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:provider/provider.dart';
 
@@ -25,29 +30,32 @@ class _TvSeriesDetailPageState extends State<TvSeriesDetailPage> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      Provider.of<TvSeriesDetailNotifier>(context, listen: false)
-        ..fetchTvSeriesDetail(widget.tvId);
+      context
+          .read<TvSeriesDetailBloc>()
+          .add(CallTvSeriesDetailById(widget.tvId));
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Consumer<TvSeriesDetailNotifier>(
-        builder: (context, provider, child) {
-          if (provider.tvSeriesDetailState == RequestState.Loading) {
-            return Center(
+      body: BlocBuilder<TvSeriesDetailBloc, TvSeriesDetailState>(
+        builder: (context, state) {
+          if (state is TvSeriesDetailLoading) {
+            return const Center(
               child: CircularProgressIndicator(),
             );
-          } else if (provider.tvSeriesDetailState == RequestState.Loaded) {
-            final tvSeriesDetail = provider.tvSeriesDetail;
-            final isAddedWatchlist = provider.addedToWatchlist;
+          } else if (state is TvSeriesDetailHasData) {
+            final tvSeriesDetail = state.tvSeriesDetail;
             return SafeArea(
-                child: DetailContentTvSeries(
-                    tvSeriesDetail: tvSeriesDetail!,
-                    isAddedWatchlist: isAddedWatchlist));
+              child: DetailContentTvSeries(tvSeriesDetail: tvSeriesDetail),
+            );
+          } else if (state is TvSeriesDetailError) {
+            FirebaseCrashlytics.instance
+                .log('Tv Series Detail Error: ${state.message}');
+            return Text(state.message);
           } else {
-            return Text(provider.message);
+            return Container();
           }
         },
       ),
@@ -55,12 +63,26 @@ class _TvSeriesDetailPageState extends State<TvSeriesDetailPage> {
   }
 }
 
-class DetailContentTvSeries extends StatelessWidget {
+class DetailContentTvSeries extends StatefulWidget {
   final TvSeriesDetail tvSeriesDetail;
-  final bool isAddedWatchlist;
 
-  DetailContentTvSeries(
-      {required this.tvSeriesDetail, required this.isAddedWatchlist});
+  DetailContentTvSeries({required this.tvSeriesDetail, Key? key})
+      : super(key: key);
+
+  @override
+  State<DetailContentTvSeries> createState() => _DetailContentTvSeriesState();
+}
+
+class _DetailContentTvSeriesState extends State<DetailContentTvSeries> {
+  @override
+  void initState() {
+    Future.microtask(() {
+      context
+          .read<TvSeriesWatchlistBloc>()
+          .add(CallWatchlistStatusById(widget.tvSeriesDetail.id));
+    });
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,18 +91,18 @@ class DetailContentTvSeries extends StatelessWidget {
       children: [
         CachedNetworkImage(
           imageUrl:
-              'https://image.tmdb.org/t/p/w500${tvSeriesDetail.posterPath}',
+              'https://image.tmdb.org/t/p/w500${widget.tvSeriesDetail.posterPath}',
           width: screenWidth,
           placeholder: (context, url) =>
-              Center(child: CircularProgressIndicator()),
-          errorWidget: (context, url, error) => Icon(Icons.error),
+              const Center(child: CircularProgressIndicator()),
+          errorWidget: (context, url, error) => const Icon(Icons.error),
         ),
         Container(
           margin: const EdgeInsets.only(top: 48 + 8),
           child: DraggableScrollableSheet(
             builder: (context, scrollController) {
               return Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: kRichBlack,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
@@ -95,70 +117,118 @@ class DetailContentTvSeries extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              tvSeriesDetail.name,
+                              widget.tvSeriesDetail.name,
                               style: kHeading5,
                             ),
-                            ElevatedButton(
-                              onPressed: (() async {
-                                if (!isAddedWatchlist) {
-                                  await Provider.of<TvSeriesDetailNotifier>(
-                                          context,
-                                          listen: false)
-                                      .insertToWatchlist(tvSeriesDetail);
+                            BlocBuilder<TvSeriesWatchlistBloc,
+                                    TvSeriesWatchlistState>(
+                                builder: (context, state) {
+                              final isAddedWatchlist =
+                                  (state is TvSeriesWatchlistInitial)
+                                      ? false
+                                      : (state as TvSeriesWatchlistGetStatus)
+                                          .watchlistTvSeriesStatus
+                                          .getOrElse(() => false);
+                              return ElevatedButton(
+                                onPressed: (() async {
+                                  if (isAddedWatchlist == true) {
+                                    context.read<TvSeriesWatchlistBloc>().add(
+                                        InsertWatchlistTvSeries(
+                                            widget.tvSeriesDetail));
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                          content: Text('Added to Watchlist')));
-                                } else {
-                                  await Provider.of<TvSeriesDetailNotifier>(
-                                          context,
-                                          listen: false)
-                                      .removeFromWatchlist(tvSeriesDetail);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                            content:
+                                                Text('Added to Watchlist')));
+                                  } else {
+                                    context.read<TvSeriesWatchlistBloc>().add(
+                                        DoRemoveWatchlistTvSeries(
+                                            widget.tvSeriesDetail));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                            content:
+                                                Text('Remove from Watchlist')));
+                                  }
+                                  if (state is TvSeriesRemoveWatchlistSuccess) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                            duration:
+                                                Duration(milliseconds: 200),
+                                            content: Text(
+                                                'Remove Watchlist is Success')));
+                                  } else if (state
+                                      is TvSeriesRemoveWatchlistError) {
+                                    FirebaseCrashlytics.instance.log(
+                                        'Remove Watchlist Error : ${state.message}');
+                                    showDialog(
+                                        context: context,
+                                        builder: (context) {
+                                          return AlertDialog(
+                                            content: Text(state.message),
+                                          );
+                                        });
+                                  }
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                          content:
-                                              Text('Remove from Watchlist')));
-                                }
-                              }),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  isAddedWatchlist
-                                      ? Icon(Icons.check)
-                                      : Icon(Icons.add),
-                                  Text('Watchlist'),
-                                ],
-                              ),
-                            ),
+                                  if (state is TvSeriesInsertWatchlistSuccess) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                            duration:
+                                                Duration(milliseconds: 200),
+                                            content: Text(
+                                                'Insert Watchlist is Success')));
+                                  } else if (state
+                                      is TvSeriesInsertWatchlistError) {
+                                    FirebaseCrashlytics.instance.log(
+                                        'Insert Watchlist Error : ${state.message}');
+                                    showDialog(
+                                        context: context,
+                                        builder: (context) {
+                                          return AlertDialog(
+                                            content: Text(state.message),
+                                          );
+                                        });
+                                  }
+                                }),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    isAddedWatchlist
+                                        ? const Icon(Icons.check)
+                                        : const Icon(Icons.add),
+                                    const Text('Watchlist'),
+                                  ],
+                                ),
+                              );
+                            }),
                             Text(
-                              _showGenres(tvSeriesDetail.genres),
+                              _showGenres(widget.tvSeriesDetail.genres),
                             ),
                             Text(_showEpisodesOfSeasons(
-                                tvSeriesDetail.numberOfSeasons,
-                                tvSeriesDetail.numberOfEpisodes)),
+                                widget.tvSeriesDetail.numberOfSeasons,
+                                widget.tvSeriesDetail.numberOfEpisodes)),
                             Row(
                               children: [
                                 RatingBarIndicator(
-                                  rating: tvSeriesDetail.voteAverage / 2,
-                                  itemBuilder: (context, index) => Icon(
+                                  rating: widget.tvSeriesDetail.voteAverage / 2,
+                                  itemBuilder: (context, index) => const Icon(
                                     Icons.star,
                                     color: kMikadoYellow,
                                   ),
                                   itemSize: 24,
                                 ),
-                                Text('${tvSeriesDetail.voteAverage}'),
-                                Text('${tvSeriesDetail.voteCount} votes'),
+                                Text('${widget.tvSeriesDetail.voteAverage}'),
+                                Text(
+                                    '${widget.tvSeriesDetail.voteCount} votes'),
                               ],
                             ),
-                            SizedBox(
+                            const SizedBox(
                               height: 16,
                             ),
                             Text(
                               'Overview',
                               style: kHeading6,
                             ),
-                            Text(tvSeriesDetail.overview),
+                            Text(widget.tvSeriesDetail.overview),
                             Text(
                               'Seasons',
                               style: kHeading6,
@@ -168,39 +238,39 @@ class DetailContentTvSeries extends StatelessWidget {
                               child: ListView.builder(
                                   shrinkWrap: true,
                                   scrollDirection: Axis.horizontal,
-                                  itemCount: tvSeriesDetail.seasons!.length,
+                                  itemCount:
+                                      widget.tvSeriesDetail.seasons!.length,
                                   itemBuilder: (context, index) {
                                     final season =
-                                        tvSeriesDetail.seasons![index];
+                                        widget.tvSeriesDetail.seasons![index];
                                     return SeasonCard(season);
                                   }),
                             ),
-                            SizedBox(
+                            const SizedBox(
                               height: 16,
                             ),
                             Text('Recommendations', style: kHeading6),
-                            Consumer<TvSeriesDetailNotifier>(
-                                builder: (context, data, child) {
-                              if (data.recommendationState ==
-                                  RequestState.Loading) {
-                                return Center(
+                            BlocBuilder<TvSeriesRecommendationBloc,
+                                    TvSeriesRecommendationState>(
+                                builder: (context, state) {
+                              if (state is TvSeriesRecommendationLoading) {
+                                return const Center(
                                   child: CircularProgressIndicator(),
                                 );
-                              } else if (data.recommendationState ==
-                                  RequestState.Loaded) {
-                                final recommendationList =
-                                    data.tvSeriesRecommendations;
-                                return TvSeriesList(recommendationList);
-                              } else if (data.recommendationState ==
-                                  RequestState.Empty) {
+                              } else if (state
+                                  is TvSeriesRecommendationHasData) {
+                                return TvSeriesList(state.tvRecommendationList);
+                              } else if (state is TvSeriesRecommendationError) {
+                                FirebaseCrashlytics.instance.log(
+                                    'TvSeries List Error: ${state.message}');
                                 return SizedBox(
                                   height: 32,
                                   child: Center(
-                                    child: Text('No recommendations available'),
+                                    child: Text(state.message),
                                   ),
                                 );
                               } else {
-                                return Text('Unknown Error');
+                                return Container();
                               }
                             }),
                           ],

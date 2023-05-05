@@ -1,18 +1,17 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:core/presentation/pages/movie/movie_detail_page.dart';
-import 'package:core/presentation/pages/movie/popular_movies_page.dart';
-import 'package:core/presentation/pages/movie/top_rated_movies_page.dart';
-import 'package:core/presentation/provider/movie/movie_list_notifier.dart';
+import 'package:core/presentation/bloc/movie/now_playing/now_playing_bloc.dart';
+import 'package:core/presentation/bloc/movie/popular/popular_bloc.dart';
+import 'package:core/presentation/bloc/movie/top_rated/top_rated_bloc.dart';
 import 'package:core/routes.dart';
-import 'package:core/utils/state_enum.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../domain/entities/movie.dart';
 import '../../../styles/text_style.dart';
-import '../../../utils/constants.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class MovieListPage extends StatefulWidget {
+  const MovieListPage({Key? key}) : super(key: key);
+
   @override
   _MovieListPageState createState() => _MovieListPageState();
 }
@@ -21,11 +20,11 @@ class _MovieListPageState extends State<MovieListPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-        () => Provider.of<MovieListNotifier>(context, listen: false)
-          ..fetchNowPlayingMovies()
-          ..fetchPopularMovies()
-          ..fetchTopRatedMovies());
+    Future.microtask(() {
+      context.read<NowPlayingBloc>().add(const LoadNowPlayingEvent());
+      context.read<PopularBloc>().add(const LoadPopularMovie());
+      context.read<TopRatedBloc>().add(const LoadTopRatedMovie());
+    });
   }
 
   @override
@@ -40,16 +39,22 @@ class _MovieListPageState extends State<MovieListPage> {
               'Now Playing',
               style: kHeading6,
             ),
-            Consumer<MovieListNotifier>(builder: (context, data, child) {
-              final state = data.nowPlayingState;
-              if (state == RequestState.Loading) {
-                return Center(
+            BlocBuilder<NowPlayingBloc, NowPlayingState>(
+                builder: (context, state) {
+              if (state is NowPlayingMovieLoading) {
+                return const Center(
                   child: CircularProgressIndicator(),
                 );
-              } else if (state == RequestState.Loaded) {
-                return MovieList(data.nowPlayingMovies);
+              } else if (state is NowPlayingMovieHasData) {
+                return MovieList(state.movieList);
+              } else if (state is NowPlayingMovieError) {
+                FirebaseCrashlytics.instance
+                    .log('Now Playing Movie List Error: ${state.errorMessage}');
+                return Center(
+                  child: Text(state.errorMessage),
+                );
               } else {
-                return Text('Failed');
+                return Container();
               }
             }),
             _buildSubHeading(
@@ -57,16 +62,21 @@ class _MovieListPageState extends State<MovieListPage> {
               onTap: () =>
                   Navigator.pushNamed(context, POPULAR_MOVIE_ROUTE_NAME),
             ),
-            Consumer<MovieListNotifier>(builder: (context, data, child) {
-              final state = data.popularMoviesState;
-              if (state == RequestState.Loading) {
-                return Center(
+            BlocBuilder<PopularBloc, PopularState>(builder: (context, state) {
+              if (state is PopularMovieLoading) {
+                return const Center(
                   child: CircularProgressIndicator(),
                 );
-              } else if (state == RequestState.Loaded) {
-                return MovieList(data.popularMovies);
+              } else if (state is PopularMovieHasData) {
+                return MovieList(state.popularList);
+              } else if (state is PopularMovieError) {
+                FirebaseCrashlytics.instance
+                    .log('Popular Movie List Error : ${state.message}');
+                return Center(
+                  child: Text(state.message),
+                );
               } else {
-                return Text('Failed');
+                return const Text('Failed');
               }
             }),
             _buildSubHeading(
@@ -74,16 +84,21 @@ class _MovieListPageState extends State<MovieListPage> {
               onTap: () =>
                   Navigator.pushNamed(context, TOP_RATED_MOVIE_ROUTE_NAME),
             ),
-            Consumer<MovieListNotifier>(builder: (context, data, child) {
-              final state = data.topRatedMoviesState;
-              if (state == RequestState.Loading) {
-                return Center(
+            BlocBuilder<TopRatedBloc, TopRatedState>(builder: (context, state) {
+              if (state is TopRatedLoading) {
+                return const Center(
                   child: CircularProgressIndicator(),
                 );
-              } else if (state == RequestState.Loaded) {
-                return MovieList(data.topRatedMovies);
+              } else if (state is TopRatedHasData) {
+                return MovieList(state.topRatedList);
+              } else if (state is TopRatedError) {
+                FirebaseCrashlytics.instance
+                    .log('Top Rated Movie List Error: ${state.message}');
+                return Center(
+                  child: Text(state.message),
+                );
               } else {
-                return Text('Failed');
+                return const Text('Failed');
               }
             }),
           ],
@@ -105,7 +120,7 @@ class _MovieListPageState extends State<MovieListPage> {
           child: Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
-              children: [Text('See More'), Icon(Icons.arrow_forward_ios)],
+              children: const [Text('See More'), Icon(Icons.arrow_forward_ios)],
             ),
           ),
         ),
@@ -140,11 +155,12 @@ class MovieList extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.all(Radius.circular(16)),
                 child: CachedNetworkImage(
-                  imageUrl: '$BASE_IMAGE_URL${movie.posterPath}',
-                  placeholder: (context, url) => Center(
+                  imageUrl:
+                      'https://image.tmdb.org/t/p/w500${movie.posterPath}',
+                  placeholder: (context, url) => const Center(
                     child: CircularProgressIndicator(),
                   ),
-                  errorWidget: (context, url, error) => Icon(Icons.error),
+                  errorWidget: (context, url, error) => const Icon(Icons.error),
                 ),
               ),
             ),

@@ -1,4 +1,18 @@
 import 'package:core/common/utils.dart';
+import 'package:core/presentation/bloc/movie/movie_detail/movie_detail_bloc.dart';
+import 'package:core/presentation/bloc/movie/movie_recommendation/movie_recommendation_bloc.dart';
+import 'package:core/presentation/bloc/movie/movie_watchlist/movie_watchlist_bloc.dart';
+import 'package:core/presentation/bloc/movie/now_playing/now_playing_bloc.dart';
+import 'package:core/presentation/bloc/movie/popular/popular_bloc.dart';
+import 'package:core/presentation/bloc/movie/top_rated/top_rated_bloc.dart';
+import 'package:core/presentation/bloc/movie/watchlist_movie/watchlist_movie_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/now_playing_tv_series/now_playing_tv_series_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/popular/popular_tv_series_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/top_rated/top_rated_tv_series_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/tv_series_detail/tv_series_detail_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/tv_series_recommendation/tv_series_recommendation_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/tv_series_watchlist/tv_series_watchlist_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/watchlist_tv_series.dart/watchlist_tv_series_bloc.dart';
 import 'package:core/presentation/pages/home_page.dart';
 import 'package:core/presentation/pages/movie/movie_detail_page.dart';
 import 'package:core/presentation/pages/movie/popular_movies_page.dart';
@@ -27,6 +41,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:http/io_client.dart';
 import 'package:provider/provider.dart';
 import 'package:ditonton/injection.dart' as di;
 import 'package:search/bloc/bloc_movie/search_bloc.dart';
@@ -37,10 +52,11 @@ import 'package:search/presentation/provider/tv_series/tv_series_search_notifier
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  di.init();
+  await di.locator.isReady<IOClient>();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  di.init();
   runApp(MyApp());
 }
 
@@ -84,7 +100,49 @@ class MyApp extends StatelessWidget {
         ),
         BlocProvider(
           create: (_) => di.locator<SearchTvSeriesBloc>(),
-        )
+        ),
+        BlocProvider(
+          create: (_) => di.locator<MovieDetailBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<MovieRecommendationBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<MovieWatchlistBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<NowPlayingBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<PopularBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<TopRatedBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<WatchlistMovieBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<NowPlayingTvSeriesBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<PopularTvSeriesBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<TopRatedTvSeriesBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<TvSeriesDetailBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<TvSeriesRecommendationBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<TvSeriesWatchlistBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.locator<WatchlistTvSeriesBloc>(),
+        ),
       ],
       child: MaterialApp(
         title: 'Flutter Demo',

@@ -1,4 +1,8 @@
+import 'package:core/presentation/bloc/tv_series/now_playing_tv_series/now_playing_tv_series_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/tv_series_detail/tv_series_detail_bloc.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 
 import '../../../utils/state_enum.dart';
@@ -14,35 +18,42 @@ class _NowPlayingTvSeriesState extends State<NowPlayingTvSeriesPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() =>
-        Provider.of<NowPlayingTvSeriesNotifier>(context, listen: false)
-            .fetchNowPlayingTvSeries());
+    Future.microtask(() {
+      context
+          .read<NowPlayingTvSeriesBloc>()
+          .add(const LoadNowPlayingTvSeries());
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Now Playing Tv Series'),
+        title: const Text('Now Playing Tv Series'),
       ),
       body: Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Consumer<NowPlayingTvSeriesNotifier>(
-            builder: (context, data, child) {
-          if (data.nowPlayingState == RequestState.Loading) {
-            return Center(child: CircularProgressIndicator());
-          } else if (data.nowPlayingState == RequestState.Loaded) {
+        padding: const EdgeInsets.all(8.0),
+        child: BlocBuilder<NowPlayingTvSeriesBloc, NowPlayingTvSeriesState>(
+            builder: (context, state) {
+          if (state is NowPlayingTvSeriesLoading) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          } else if (state is NowPlayingTvSeriesHasData) {
             return ListView.builder(
                 itemBuilder: (context, index) {
-                  final tvSeries = data.nowPlayingTvSeriesList[index];
-                  return TvSeriesCard(tvSeries);
+                  return TvSeriesCard(state.nowPlayingTvList[index]);
                 },
-                itemCount: data.nowPlayingTvSeriesList.length);
-          } else {
+                itemCount: state.nowPlayingTvList.length);
+          } else if (state is NowPlayingTvSeriesError) {
+            FirebaseCrashlytics.instance
+                .log('Now Playing Tv Series Error: ${state.message}');
             return Center(
-              key: Key('error-message'),
-              child: Text(data.message),
+              key: const Key('error-message'),
+              child: Text(state.message),
             );
+          } else {
+            return Container();
           }
         }),
       ),

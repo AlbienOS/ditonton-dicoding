@@ -1,7 +1,10 @@
+import 'package:core/presentation/bloc/tv_series/popular/popular_tv_series_bloc.dart';
 import 'package:core/presentation/provider/tv_series/popular_tv_series_notifier.dart';
 import 'package:core/presentation/widgets/tv_series_card_list.dart';
 import 'package:core/utils/state_enum.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 
 class PopularTvSeriesPage extends StatefulWidget {
@@ -13,35 +16,38 @@ class _PopularTvSeriesPageState extends State<PopularTvSeriesPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() =>
-        Provider.of<PopularTvSeriesNotifier>(context, listen: false)
-            .fetchPopularTvSeries());
+    Future.microtask(() {
+      context.read<PopularTvSeriesBloc>().add(const LoadPopularTvSeriesEvent());
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Popular Tv Series'),
+        title: const Text('Popular Tv Series'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
-        child: Consumer<PopularTvSeriesNotifier>(
-            builder: (context, provider, child) {
-          if (provider.popularTvSeriesState == RequestState.Loading) {
-            return Center(
+        child: BlocBuilder<PopularTvSeriesBloc, PopularTvSeriesState>(
+            builder: (context, state) {
+          if (state is PopularTvSeriesLoading) {
+            return const Center(
               child: CircularProgressIndicator(),
             );
-          } else if (provider.popularTvSeriesState == RequestState.Loaded) {
+          } else if (state is PopularTvSeriesHasData) {
             return ListView.builder(itemBuilder: (context, index) {
-              final popularTvSeriesList = provider.popularTvSeriesList[index];
-              return TvSeriesCard(popularTvSeriesList);
+              return TvSeriesCard(state.popularTvList[index]);
             });
-          } else {
+          } else if (state is PopularTvSeriesError) {
+            FirebaseCrashlytics.instance
+                .log('Popular Tv Series Error: ${state.message}');
             return Center(
-              key: Key('error-message'),
-              child: Text(provider.message),
+              key: const Key('error-message'),
+              child: Text(state.message),
             );
+          } else {
+            return Container();
           }
         }),
       ),

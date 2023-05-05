@@ -37,7 +37,7 @@ class _HomePageState extends State<HomePage> {
       drawer: Drawer(
         child: Column(
           children: [
-            UserAccountsDrawerHeader(
+            const UserAccountsDrawerHeader(
               currentAccountPicture: CircleAvatar(
                 backgroundImage: AssetImage('assets/circle-g.png'),
               ),
@@ -45,8 +45,8 @@ class _HomePageState extends State<HomePage> {
               accountEmail: Text('ditonton@dicoding.com'),
             ),
             ListTile(
-              leading: Icon(Icons.movie),
-              title: Text('Movie list'),
+              leading: const Icon(Icons.movie),
+              title: const Text('Movie'),
               onTap: () {
                 Navigator.pop(context);
                 if (_currentIndex == moviePageIndex) {
@@ -63,7 +63,7 @@ class _HomePageState extends State<HomePage> {
             ),
             ListTile(
                 leading: Icon(Icons.tv),
-                title: Text('TV Series list'),
+                title: Text('TV Series'),
                 onTap: () {
                   Navigator.pop(context);
                   if (_currentIndex == tvSeriesPageIndex) {

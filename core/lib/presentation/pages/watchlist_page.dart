@@ -1,11 +1,11 @@
 import 'package:core/common/utils.dart';
-import 'package:core/presentation/provider/movie/watchlist_movie_notifier.dart';
-import 'package:core/presentation/provider/tv_series/watchlist_tv_series_notifier.dart';
+import 'package:core/presentation/bloc/movie/watchlist_movie/watchlist_movie_bloc.dart';
+import 'package:core/presentation/bloc/tv_series/watchlist_tv_series.dart/watchlist_tv_series_bloc.dart';
 import 'package:core/presentation/widgets/movie_card_list.dart';
 import 'package:core/presentation/widgets/tv_series_card_list.dart';
-import 'package:core/utils/state_enum.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../styles/colors.dart';
 
@@ -23,10 +23,8 @@ class _WatchlistPageState extends State<WatchlistPage>
     _tabController = TabController(length: 2, vsync: this);
     super.initState();
     Future.microtask(() {
-      Provider.of<WatchlistMovieNotifier>(context, listen: false)
-          .fetchWatchlistMovies();
-      Provider.of<WatchlistTvSeriesNotifier>(context, listen: false)
-          .fetchWatchlistTvSeries();
+      context.read<WatchlistMovieBloc>().add(const LoadWatchlistMovie());
+      context.read<WatchlistTvSeriesBloc>().add(const LoadWatchlistTvSeries());
     });
   }
 
@@ -37,10 +35,8 @@ class _WatchlistPageState extends State<WatchlistPage>
   }
 
   void didPopNext() {
-    Provider.of<WatchlistMovieNotifier>(context, listen: false)
-        .fetchWatchlistMovies();
-    Provider.of<WatchlistTvSeriesNotifier>(context, listen: false)
-        .fetchWatchlistTvSeries();
+    context.read<WatchlistMovieBloc>().add(const LoadWatchlistMovie());
+    context.read<WatchlistTvSeriesBloc>().add(const LoadWatchlistTvSeries());
   }
 
   @override
@@ -72,25 +68,28 @@ class _MovieWatchlistWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Consumer<WatchlistMovieNotifier>(
-        builder: (context, data, child) {
-          if (data.watchlistState == RequestState.Loading) {
-            return Center(
+      child: BlocBuilder<WatchlistMovieBloc, WatchlistMovieState>(
+        builder: (context, state) {
+          if (state is WatchlistMovieLoading) {
+            return const Center(
               child: CircularProgressIndicator(),
             );
-          } else if (data.watchlistState == RequestState.Loaded) {
+          } else if (state is WatchlistMovieHasData) {
             return ListView.builder(
               itemBuilder: (context, index) {
-                final movie = data.watchlistMovies[index];
-                return MovieCard(movie);
+                return MovieCard(state.watchlistMovie[index]);
               },
-              itemCount: data.watchlistMovies.length,
+              itemCount: state.watchlistMovie.length,
+            );
+          } else if (state is WatchlistMovieError) {
+            FirebaseCrashlytics.instance
+                .log('Watchlist Movie Error: ${state.message}');
+            return Center(
+              key: const Key('error_message'),
+              child: Text(state.message),
             );
           } else {
-            return Center(
-              key: Key('error_message'),
-              child: Text(data.message),
-            );
+            return Container();
           }
         },
       ),
@@ -103,25 +102,29 @@ class _TvSeriesWatchlistWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Consumer<WatchlistTvSeriesNotifier>(
-        builder: (context, data, child) {
-          if (data.watchlistTvSeriesState == RequestState.Loading) {
-            return Center(
+      child: BlocBuilder<WatchlistTvSeriesBloc, WatchlistTvSeriesState>(
+        builder: (context, state) {
+          if (state is WatchlistTvSeriesLoading) {
+            return const Center(
               child: CircularProgressIndicator(),
             );
-          } else if (data.watchlistTvSeriesState == RequestState.Loaded) {
+          } else if (state is WatchlistTvSeriesHasData) {
             return ListView.builder(
               itemBuilder: (context, index) {
-                final tvSeries = data.watchlistTvSeries[index];
+                final tvSeries = state.watchlistTvSeries[index];
                 return TvSeriesCard(tvSeries);
               },
-              itemCount: data.watchlistTvSeries.length,
+              itemCount: state.watchlistTvSeries.length,
             );
-          } else {
+          } else if (state is WatchlistTvSeriesError) {
+            FirebaseCrashlytics.instance
+                .log('Watchlist Tv Series Error: ${state.message}');
             return Center(
               key: Key('error_message'),
-              child: Text(data.message),
+              child: Text(state.message),
             );
+          } else {
+            return Container();
           }
         },
       ),
