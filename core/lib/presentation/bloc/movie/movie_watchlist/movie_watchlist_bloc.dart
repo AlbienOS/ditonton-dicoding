@@ -17,7 +17,7 @@ class MovieWatchlistBloc
       {required this.insertWatchlist,
       required this.removeWatchlist,
       required this.getWatchListStatus})
-      : super(MovieWatchlistEmpty()) {
+      : super(MovieWatchlistInitial()) {
     on<LoadWatchlistStatus>((event, emit) async {
       final id = event.movieId;
       final result = await getWatchListStatus.execute(id);
